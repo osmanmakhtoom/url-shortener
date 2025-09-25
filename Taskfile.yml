@@ -1,0 +1,168 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task: help
+
+  help:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  # ------------------------------
+  # Docker lifecycle
+  # ------------------------------
+  build:
+    desc: Build Docker images
+    cmds:
+      - docker compose --env-file .env build
+
+  up:
+    desc: Start all services (backend, db, redis, rabbitmq, workers)
+    cmds:
+      - docker compose --env-file .env up -d --build
+
+  down:
+    desc: Stop all services and remove volumes
+    cmds:
+      - docker compose down --remove-orphans -v
+
+  logs:
+    desc: Show logs for backend container
+    cmds:
+      - docker compose logs -f backend
+
+  shell:
+    desc: Open shell in backend container
+    cmds:
+      - docker compose exec backend bash
+
+  # ------------------------------
+  # Database (Alembic + direct ops)
+  # ------------------------------
+  db-migrate:
+    desc: Run Alembic migrations (upgrade to latest)
+    cmds:
+      - docker compose exec backend alembic upgrade head
+
+  db-makemigration:
+    desc: Create new Alembic migration
+    cmds:
+      - docker compose exec backend alembic revision --autogenerate -m "{{.CLI_ARGS}}"
+
+  db-downgrade:
+    desc: Downgrade database by one revision
+    cmds:
+      - docker compose exec backend alembic downgrade -1
+
+  db-downgrade-to:
+    desc: Downgrade database to specific revision
+    cmds:
+      - docker compose exec backend alembic downgrade "{{.CLI_ARGS}}"
+
+  db-history:
+    desc: Show migration history
+    cmds:
+      - docker compose exec backend alembic history
+
+  db-current:
+    desc: Show current database revision
+    cmds:
+      - docker compose exec backend alembic current
+
+  db-create-tables:
+    desc: Create tables directly (development only)
+    cmds:
+      - docker compose exec backend python -m app.management create-tables
+
+  db-reset:
+    desc: Reset database (drop and recreate all tables)
+    cmds:
+      - docker compose exec backend python -c "from app.core.db import engine; from sqlmodel import SQLModel; from app.models import *; SQLModel.metadata.drop_all(engine); SQLModel.metadata.create_all(engine)"
+
+  db-shell:
+    desc: Open database shell
+    cmds:
+      - docker compose exec postgres psql -U ${DB_USER} -d ${DB_NAME}
+
+  db-show-tables:
+    desc: Show all database tables
+    cmds:
+      - docker compose exec postgres psql -U ${DB_USER} -d ${DB_NAME} -c "\dt"
+
+  db-show-migrations:
+    desc: Show applied migrations in database
+    cmds:
+      - docker compose exec postgres psql -U ${DB_USER} -d ${DB_NAME} -c "SELECT * FROM alembic_version;"
+
+  db-backup:
+    desc: Create database backup
+    cmds:
+      - docker compose exec postgres pg_dump -U ${DB_USER} ${DB_NAME} > backup_$(date +%Y%m%d_%H%M%S).sql
+
+  db-restore:
+    desc: Restore database from backup file
+    cmds:
+      - docker compose exec -T postgres psql -U ${DB_USER} -d ${DB_NAME} < "{{.CLI_ARGS}}"
+
+  # ------------------------------
+  # Development shortcuts
+  # ------------------------------
+  dev-setup:
+    desc: Complete dev setup (up + migrate + tables)
+    cmds:
+      - task: up
+      - task: db-migrate
+      - task: db-create-tables
+
+  dev-reset:
+    desc: Reset development environment (down + up + migrate + tables)
+    cmds:
+      - task: down
+      - task: up
+      - task: db-migrate
+      - task: db-create-tables
+
+  # ------------------------------
+  # Tests
+  # ------------------------------
+  test:
+    desc: Run pytest inside Docker backend
+    cmds:
+      - docker compose exec backend pytest -q --disable-warnings --maxfail=1
+
+  coverage:
+    desc: Run tests with coverage (inside Docker)
+    cmds:
+      - docker compose exec backend pytest --cov=app . --cov-fail-under=80
+      - docker compose exec backend pytest --cov=app . --cov-fail-under=80 --cov-report=html
+
+  test-local:
+    desc: Run pytest directly on host (needs local deps running)
+    cmds:
+      - pytest -q --disable-warnings --maxfail=1
+
+  coverage-local:
+    desc: Run coverage locally (needs local deps running)
+    cmds:
+      - pytest --cov=app . --cov-fail-under=80
+      - pytest --cov=app . --cov-fail-under=80 --cov-report=html
+
+  # ------------------------------
+  # Quality (lint, format, types)
+  # ------------------------------
+  lint:
+    desc: Run Ruff linting
+    cmds:
+      - docker compose exec backend ruff check --quiet
+
+  format:
+    desc: Auto-fix with Ruff
+    cmds:
+      - docker compose exec backend ruff format
+
+  typecheck:
+    desc: Run MyPy type checks
+    cmds:
+      - docker compose exec backend mypy app
