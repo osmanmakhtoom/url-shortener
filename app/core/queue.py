@@ -1,8 +1,10 @@
 import asyncio
-import logging
-import aio_pika
 import json
-from typing import Optional, Callable, Awaitable, Any
+import logging
+from typing import Any, Awaitable, Callable, Optional
+
+import aio_pika
+
 from app.core.config import settings
 
 logger = logging.getLogger("RabbitMQ Client")
@@ -11,10 +13,12 @@ logger = logging.getLogger("RabbitMQ Client")
 class RabbitMQClient:
     def __init__(self, url: str = settings.RABBITMQ_URL):
         self._url = url
-        self._connection: Optional[aio_pika.RobustConnection] = None
+        self._connection: Optional[aio_pika.abc.AbstractRobustConnection] = None
         self._channel: Optional[aio_pika.abc.AbstractChannel] = None
 
-    async def connect(self, max_retries: int = 3, retry_delay: int = 5):
+    async def connect(
+        self, max_retries: int = 3, retry_delay: int = 5
+    ) -> Optional[aio_pika.abc.AbstractChannel]:
         """Connect to RabbitMQ with retry logic."""
         for attempt in range(max_retries):
             try:
@@ -30,15 +34,16 @@ class RabbitMQClient:
                     await asyncio.sleep(retry_delay * (attempt + 1))
                 else:
                     raise e
+        return self._channel
 
-    async def close(self):
+    async def close(self) -> None:
         """Close RabbitMQ connection."""
         if self._connection:
             await self._connection.close()
             self._connection = None
             self._channel = None
 
-    async def publish(self, queue_name: str, message: dict):
+    async def publish(self, queue_name: str, message: dict) -> None:
         """Publish message to queue."""
         assert self._channel, "RabbitMQ channel not initialized. Call connect() first."
         body = json.dumps(message, default=str).encode()
@@ -48,7 +53,7 @@ class RabbitMQClient:
             routing_key=queue.name,
         )
 
-    async def consume(self, queue_name: str, handler: Callable[[Any], Awaitable[None]]):
+    async def consume(self, queue_name: str, handler: Callable[[Any], Awaitable[None]]) -> None:
         """Consume messages from queue."""
         assert self._channel, "RabbitMQ channel not initialized. Call connect() first."
         queue = await self._channel.declare_queue(queue_name, durable=True)

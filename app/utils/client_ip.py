@@ -1,4 +1,5 @@
 import re
+
 from fastapi import Request
 
 SHORT_CODE_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")

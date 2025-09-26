@@ -1,11 +1,13 @@
 import asyncio
-import logging
 import json
+import logging
+from typing import Any, Optional
+
 from app.core.db import get_session
 from app.core.queue import rabbitmq_client
+from app.models import Visit
 from app.schemas.visit_message import VisitMessage
 from app.services import URLService
-from app.models import Visit
 
 logger = logging.getLogger("VisitWorker")
 
@@ -15,13 +17,13 @@ MAX_BUFFER_SIZE = 1000
 
 
 class VisitWorker:
-    def __init__(self):
+    def __init__(self) -> None:
         self.rabbitmq = rabbitmq_client
         self.buffer: list[VisitMessage] = []
-        self._flush_task = None
+        self._flush_task: Optional[Any] = None
         self._consuming = True
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the worker with connection retry logic."""
         max_retries = 3
         for attempt in range(max_retries):
@@ -40,7 +42,7 @@ class VisitWorker:
                     logger.error("Max connection retries exceeded")
                     raise
 
-    async def _handle_message(self, message_body: bytes):
+    async def _handle_message(self, message_body: bytes) -> None:
         """Handle incoming messages using Pydantic schema."""
         try:
             payload = json.loads(message_body.decode("utf-8"))
@@ -55,11 +57,15 @@ class VisitWorker:
                 await self.flush()
 
         except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}, raw={message_body}")
+            logger.error(
+                f"JSON decode error: {e}, raw={message_body.decode('utf-8', errors='replace')}"
+            )
         except Exception as e:
-            logger.error(f"Error handling message: {e}, raw={message_body}")
+            logger.error(
+                f"Error handling message: {e}, raw={message_body.decode('utf-8', errors='replace')}"
+            )
 
-    async def _periodic_flush(self):
+    async def _periodic_flush(self) -> None:
         """Periodic flush with error handling."""
         while self._consuming:
             try:
@@ -71,7 +77,7 @@ class VisitWorker:
             except Exception as e:
                 logger.error(f"Periodic flush error: {e}")
 
-    async def flush(self):
+    async def flush(self) -> None:
         """Flush buffer to database with transaction handling."""
         if not self.buffer:
             return
@@ -132,7 +138,7 @@ class VisitWorker:
             logger.error(f"Flush error: {e}")
             self.buffer.extend(buffer_copy)
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Graceful shutdown."""
         self._consuming = False
         if self._flush_task:

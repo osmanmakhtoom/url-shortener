@@ -1,26 +1,88 @@
-fastapi>=0.116.2
-uvicorn[standard]>=0.36.0
+# Core Framework
+fastapi==0.117.1
+uvicorn[standard]==0.37.0
 
-sqlmodel>=0.0.25
-pydantic>=2.11.9
-pydantic-settings>=2.0.0
-alembic>=1.16.5
-psycopg[binary]>=3.2.10
-asyncpg>=0.30.0
-redis>=6.4.0
-aio-pika>=9.5.7
+# Database & ORM
+sqlmodel==0.0.25
+pydantic==2.11.9
+pydantic-settings==2.11.0
+alembic==1.16.5
+psycopg[binary]==3.2.10
+asyncpg==0.30.0
+redis==6.4.0
+aio-pika==9.5.7
 
-pytest>=8.4.2
-pytest-asyncio>=1.2.0
-pytest-cov>=7.0.0
+# Testing Framework
+pytest==8.4.2
+pytest-asyncio==1.2.0
+pytest-cov==7.0.0
+pytest-xdist==3.8.0
+pytest-benchmark==5.1.0
+pytest-mock==3.15.1
+pytest-html==4.1.1
+pytest-json-report==1.5.0
 
-httpx>=0.28.1
+# HTTP Client
+httpx==0.28.1
 
-mypy>=1.18.2
-ruff>=0.13.1
+# Code Quality & Linting
+mypy==1.18.2
+ruff==0.13.1
+black==25.9.0
+isort==6.0.1
+flake8==7.3.0
+pre-commit==4.3.0
 
-uuid6>=2025.0.1
+# Security Tools
+bandit==1.8.6
+safety==3.6.2
+pip-audit==2.9.0
+cryptography==46.0.1
 
-python-dotenv>=1.1.1
+# Performance & Load Testing
+locust==2.41.1
 
-go-task-bin>=3.45.4
+# Monitoring & Profiling
+psutil==7.1.0
+memory-profiler==0.61.0
+py-spy==0.4.1
+pyinstrument==5.1.1
+
+# Development Utilities
+uuid6==2025.0.1
+python-dotenv==1.1.1
+rich==14.1.0
+typer==0.19.2
+
+# Documentation
+mkdocs==1.6.1
+mkdocs-material==9.6.20
+mkdocs-swagger-ui-tag==0.7.2
+mergedeep==1.3.4
+
+# Task Runner
+go-task-bin==3.45.4
+
+# Additional Testing Tools
+factory-boy==3.3.3
+faker==37.8.0
+freezegun==1.5.5
+responses==0.25.8
+
+# Database Testing
+pytest-postgresql==7.0.2
+
+# API Testing
+pytest-httpx==0.35.0
+requests-mock==1.12.1
+
+# Code Coverage
+coverage==7.10.7
+coverage-badge==1.1.2
+
+# Dependency Management
+pip-tools==7.5.0
+pipdeptree==2.28.0
+
+# Environment Management
+python-decouple==3.8

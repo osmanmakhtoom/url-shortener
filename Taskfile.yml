@@ -1,168 +1,845 @@
 version: "3"
 
+# Environment variables
+vars:
+  PROJECT_NAME: "url-shortener"
+  BACKEND_SERVICE: "backend"
+  DB_SERVICE: "postgres"
+  REDIS_SERVICE: "redis"
+  RABBITMQ_SERVICE: "rabbitmq"
+  NGINX_SERVICE: "nginx"
+
 tasks:
   default:
     cmds:
       - task: help
 
   help:
-    desc: List available tasks
+    desc: List all available tasks with descriptions
     cmds:
+      - echo "URL Shortener - Development Toolbox"
+      - echo ""
       - task --list
 
-  # ------------------------------
-  # Docker lifecycle
-  # ------------------------------
+  # ========================================
+  # DOCKER & INFRASTRUCTURE
+  # ========================================
+  
   build:
-    desc: Build Docker images
+    desc: Build all Docker images
     cmds:
       - docker compose --env-file .env build
 
+  build-no-cache:
+    desc: Build Docker images without cache
+    cmds:
+      - docker compose --env-file .env build --no-cache
+
   up:
-    desc: Start all services (backend, db, redis, rabbitmq, workers)
+    desc: Start all services (backend, db, redis, rabbitmq, nginx)
     cmds:
       - docker compose --env-file .env up -d --build
+
+  up-detached:
+    desc: Start services in background
+    cmds:
+      - docker compose --env-file .env up -d
 
   down:
     desc: Stop all services and remove volumes
     cmds:
       - docker compose down --remove-orphans -v
 
-  logs:
-    desc: Show logs for backend container
+  down-keep-volumes:
+    desc: Stop services but keep volumes
     cmds:
-      - docker compose logs -f backend
+      - docker compose down --remove-orphans
+
+  restart:
+    desc: Restart all services
+    cmds:
+      - task: down
+      - task: up
+
+  restart-backend:
+    desc: Restart only backend service
+    cmds:
+      - docker compose restart {{.BACKEND_SERVICE}}
+
+  logs:
+    desc: Show logs for all services
+    cmds:
+      - docker compose logs -f
+
+  logs-backend:
+    desc: Show logs for backend service
+    cmds:
+      - docker compose logs -f {{.BACKEND_SERVICE}}
+
+  logs-db:
+    desc: Show logs for database service
+    cmds:
+      - docker compose logs -f {{.DB_SERVICE}}
+
+  logs-redis:
+    desc: Show logs for Redis service
+    cmds:
+      - docker compose logs -f {{.REDIS_SERVICE}}
+
+  logs-rabbitmq:
+    desc: Show logs for RabbitMQ service
+    cmds:
+      - docker compose logs -f {{.RABBITMQ_SERVICE}}
 
   shell:
     desc: Open shell in backend container
     cmds:
-      - docker compose exec backend bash
+      - docker compose exec {{.BACKEND_SERVICE}} bash
 
-  # ------------------------------
-  # Database (Alembic + direct ops)
-  # ------------------------------
+  shell-db:
+    desc: Open PostgreSQL shell
+    cmds:
+      - docker compose exec {{.DB_SERVICE}} psql -U shortener_db_user -d shortener_db
+
+  shell-redis:
+    desc: Open Redis CLI
+    cmds:
+      - docker compose exec {{.REDIS_SERVICE}} redis-cli
+
+  shell-rabbitmq:
+    desc: Open RabbitMQ management shell
+    cmds:
+      - docker compose exec {{.RABBITMQ_SERVICE}} rabbitmq-diagnostics
+
+  status:
+    desc: Show status of all services
+    cmds:
+      - docker compose ps
+
+  health:
+    desc: Check health of all services
+    cmds:
+      - echo "Checking service health..."
+      - curl -f http://localhost:8000/health
+
+  # ========================================
+  # DATABASE OPERATIONS
+  # ========================================
+
   db-migrate:
     desc: Run Alembic migrations (upgrade to latest)
     cmds:
-      - docker compose exec backend alembic upgrade head
+      - docker compose exec {{.BACKEND_SERVICE}} alembic upgrade head
 
   db-makemigration:
     desc: Create new Alembic migration
     cmds:
-      - docker compose exec backend alembic revision --autogenerate -m "{{.CLI_ARGS}}"
+      - docker compose exec {{.BACKEND_SERVICE}} alembic revision --autogenerate -m "{{.CLI_ARGS}}"
 
   db-downgrade:
     desc: Downgrade database by one revision
     cmds:
-      - docker compose exec backend alembic downgrade -1
+      - docker compose exec {{.BACKEND_SERVICE}} alembic downgrade -1
 
   db-downgrade-to:
     desc: Downgrade database to specific revision
     cmds:
-      - docker compose exec backend alembic downgrade "{{.CLI_ARGS}}"
+      - docker compose exec {{.BACKEND_SERVICE}} alembic downgrade "{{.CLI_ARGS}}"
 
   db-history:
     desc: Show migration history
     cmds:
-      - docker compose exec backend alembic history
+      - docker compose exec {{.BACKEND_SERVICE}} alembic history
 
   db-current:
     desc: Show current database revision
     cmds:
-      - docker compose exec backend alembic current
+      - docker compose exec {{.BACKEND_SERVICE}} alembic current
 
   db-create-tables:
     desc: Create tables directly (development only)
     cmds:
-      - docker compose exec backend python -m app.management create-tables
+      - docker compose exec {{.BACKEND_SERVICE}} python -m app.management create-tables
 
   db-reset:
     desc: Reset database (drop and recreate all tables)
     cmds:
-      - docker compose exec backend python -c "from app.core.db import engine; from sqlmodel import SQLModel; from app.models import *; SQLModel.metadata.drop_all(engine); SQLModel.metadata.create_all(engine)"
-
-  db-shell:
-    desc: Open database shell
-    cmds:
-      - docker compose exec postgres psql -U ${DB_USER} -d ${DB_NAME}
+      - docker compose exec {{.BACKEND_SERVICE}} python -c "from app.core.db import engine; from sqlmodel import SQLModel; from app.models import *; SQLModel.metadata.drop_all(engine); SQLModel.metadata.create_all(engine)"
 
   db-show-tables:
     desc: Show all database tables
     cmds:
-      - docker compose exec postgres psql -U ${DB_USER} -d ${DB_NAME} -c "\dt"
+      - docker compose exec {{.DB_SERVICE}} psql -U shortener_db_user -d shortener_db -c "\dt"
 
   db-show-migrations:
     desc: Show applied migrations in database
     cmds:
-      - docker compose exec postgres psql -U ${DB_USER} -d ${DB_NAME} -c "SELECT * FROM alembic_version;"
+      - docker compose exec {{.DB_SERVICE}} psql -U shortener_db_user -d shortener_db -c "SELECT * FROM alembic_version;"
 
   db-backup:
     desc: Create database backup
     cmds:
-      - docker compose exec postgres pg_dump -U ${DB_USER} ${DB_NAME} > backup_$(date +%Y%m%d_%H%M%S).sql
+      - docker compose exec {{.DB_SERVICE}} pg_dump -U shortener_db_user shortener_db > backup_$(date +%Y%m%d_%H%M%S).sql
+      - echo "Backup created successfully"
 
   db-restore:
     desc: Restore database from backup file
     cmds:
-      - docker compose exec -T postgres psql -U ${DB_USER} -d ${DB_NAME} < "{{.CLI_ARGS}}"
+      - docker compose exec -T {{.DB_SERVICE}} psql -U shortener_db_user -d shortener_db < "{{.CLI_ARGS}}"
 
-  # ------------------------------
-  # Development shortcuts
-  # ------------------------------
-  dev-setup:
-    desc: Complete dev setup (up + migrate + tables)
+  db-analyze:
+    desc: Analyze database performance
     cmds:
-      - task: up
-      - task: db-migrate
-      - task: db-create-tables
+      - docker compose exec {{.DB_SERVICE}} psql -U shortener_db_user -d shortener_db -c "SELECT schemaname,tablename,attname,n_distinct,correlation FROM pg_stats WHERE schemaname = 'public';"
 
-  dev-reset:
-    desc: Reset development environment (down + up + migrate + tables)
-    cmds:
-      - task: down
-      - task: up
-      - task: db-migrate
-      - task: db-create-tables
+  # ========================================
+  # TESTING & QUALITY
+  # ========================================
 
-  # ------------------------------
-  # Tests
-  # ------------------------------
   test:
-    desc: Run pytest inside Docker backend
+    desc: Run all tests
     cmds:
-      - docker compose exec backend pytest -q --disable-warnings --maxfail=1
+      - docker compose exec {{.BACKEND_SERVICE}} pytest -q --disable-warnings --maxfail=1
 
-  coverage:
-    desc: Run tests with coverage (inside Docker)
+  test-verbose:
+    desc: Run tests with verbose output
     cmds:
-      - docker compose exec backend pytest --cov=app . --cov-fail-under=80
-      - docker compose exec backend pytest --cov=app . --cov-fail-under=80 --cov-report=html
+      - docker compose exec {{.BACKEND_SERVICE}} pytest -v --disable-warnings
 
-  test-local:
-    desc: Run pytest directly on host (needs local deps running)
+  test-specific:
+    desc: Run specific test file or pattern
     cmds:
-      - pytest -q --disable-warnings --maxfail=1
+      - docker compose exec {{.BACKEND_SERVICE}} pytest "{{.CLI_ARGS}}" -v
 
-  coverage-local:
-    desc: Run coverage locally (needs local deps running)
+  test-failed:
+    desc: Run only failed tests from last run
     cmds:
-      - pytest --cov=app . --cov-fail-under=80
-      - pytest --cov=app . --cov-fail-under=80 --cov-report=html
+      - docker compose exec {{.BACKEND_SERVICE}} pytest --lf -v
 
-  # ------------------------------
-  # Quality (lint, format, types)
-  # ------------------------------
+  test-coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest --cov=app --cov-config=.coveragerc --cov-report=html --cov-report=term
+      - echo "Coverage report generated in htmlcov/"
+
+  test-coverage-fail:
+    desc: Run tests with coverage and fail if below threshold
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest --cov=app --cov-config=.coveragerc --cov-fail-under=80 --cov-report=html --cov-report=term
+
+  test-performance:
+    desc: Run performance tests
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest tests/test_performance.py -v
+
+  test-integration:
+    desc: Run integration tests
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest tests/test_api_comprehensive.py -v
+
+  test-services:
+    desc: Run service layer tests
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest tests/test_services_comprehensive.py -v
+
+  test-business-logic:
+    desc: Run business logic tests
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest tests/test_business_logic_and_errors.py -v
+
+  test-validation:
+    desc: Run validation and schema tests
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest tests/test_validation_and_schemas.py -v
+
+  test-all-categories:
+    desc: Run all test categories
+    cmds:
+      - task: test-services
+      - task: test-integration
+      - task: test-business-logic
+      - task: test-validation
+
+  test-parallel:
+    desc: Run tests in parallel for faster execution
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest -n auto --disable-warnings
+
+  test-benchmark:
+    desc: Run performance benchmark tests
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest --benchmark-only --benchmark-sort=mean
+
+  test-html-report:
+    desc: Generate HTML test report
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest --html=reports/test-report.html --self-contained-html
+      - echo "HTML test report generated in reports/test-report.html"
+
+  test-json-report:
+    desc: Generate JSON test report
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pytest --json-report --json-report-file=reports/test-report.json
+      - echo "JSON test report generated in reports/test-report.json"
+
+  test-coverage-badge:
+    desc: Generate coverage badge
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} coverage-badge -o coverage.svg -f
+
+  # ========================================
+  # CODE QUALITY & LINTING
+  # ========================================
+
   lint:
     desc: Run Ruff linting
     cmds:
-      - docker compose exec backend ruff check --quiet
+      - docker compose exec {{.BACKEND_SERVICE}} ruff check --quiet
+
+  lint-verbose:
+    desc: Run Ruff linting with detailed output
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} ruff check
+
+  lint-fix:
+    desc: Auto-fix linting issues
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} ruff check --fix
 
   format:
-    desc: Auto-fix with Ruff
+    desc: Format code with Ruff
     cmds:
-      - docker compose exec backend ruff format
+      - docker compose exec {{.BACKEND_SERVICE}} ruff format
+
+  format-check:
+    desc: Check code formatting without changing files
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} ruff format --check
 
   typecheck:
     desc: Run MyPy type checks
     cmds:
-      - docker compose exec backend mypy app
+      - docker compose exec {{.BACKEND_SERVICE}} mypy app
+
+  typecheck-strict:
+    desc: Run MyPy with strict mode
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} mypy app --strict
+
+  lint-black:
+    desc: Run Black code formatting
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} black --check app/
+
+  lint-black-fix:
+    desc: Fix code formatting with Black
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} black app/
+
+  lint-isort:
+    desc: Check import sorting with isort
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} isort --check-only app/
+
+  lint-isort-fix:
+    desc: Fix import sorting with isort
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} isort app/
+
+  lint-flake8:
+    desc: Run Flake8 linting
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} flake8 app/
+
+  pre-commit-install:
+    desc: Install pre-commit hooks
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pre-commit install
+
+  pre-commit-run:
+    desc: Run pre-commit hooks on all files
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pre-commit run --all-files
+
+  quality:
+    desc: Run all quality checks (lint + format + typecheck)
+    cmds:
+      - task: lint
+      - task: format-check
+      - task: typecheck
+
+  quality-fix:
+    desc: Auto-fix all quality issues
+    cmds:
+      - task: lint-fix
+      - task: format
+
+  quality-comprehensive:
+    desc: Run comprehensive quality checks
+    cmds:
+      - task: lint
+      - task: lint-black
+      - task: lint-isort
+      - task: lint-flake8
+      - task: format-check
+      - task: typecheck
+      - task: security-bandit
+
+  # ========================================
+  # DEVELOPMENT WORKFLOW
+  # ========================================
+
+  dev-setup:
+    desc: Complete development setup
+    cmds:
+      - echo "Setting up development environment..."
+      - task: up
+      - task: db-migrate
+      - task: db-create-tables
+      - task: health
+      - echo "Development environment ready!"
+
+  dev-reset:
+    desc: Reset development environment
+    cmds:
+      - echo "Resetting development environment..."
+      - task: down
+      - task: up
+      - task: db-migrate
+      - task: db-create-tables
+      - task: health
+      - echo "Development environment reset complete!"
+
+  dev-clean:
+    desc: Clean development environment (remove volumes, images)
+    cmds:
+      - echo "Cleaning development environment..."
+      - docker compose down --remove-orphans -v
+      - docker system prune -f
+      - echo "Development environment cleaned!"
+
+  dev-status:
+    desc: Show development environment status
+    cmds:
+      - task: status
+      - task: health
+      - task: db-current
+
+  # ========================================
+  # API & SERVICE MANAGEMENT
+  # ========================================
+
+  api-test:
+    desc: Test API endpoints
+    cmds:
+      - echo "Testing API endpoints..."
+      - curl -f http://localhost:8000/health
+      - echo "API endpoints tested"
+
+  api-docs:
+    desc: Show API documentation URLs
+    cmds:
+      - echo "API Documentation available at"
+      - echo "  Swagger UI - http://localhost:8000/docs"
+      - echo "  ReDoc - http://localhost:8000/redoc"
+      - echo "  OpenAPI JSON - http://localhost:8000/openapi.json"
+
+  workers-start:
+    desc: Start background workers
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} python -m app.workers.manager_worker
+
+  workers-status:
+    desc: Check worker status
+    cmds:
+      - echo "Checking worker status..."
+      - docker compose exec {{.RABBITMQ_SERVICE}} rabbitmq-diagnostics list_queues
+
+  cache-clear:
+    desc: Clear Redis cache
+    cmds:
+      - docker compose exec {{.REDIS_SERVICE}} redis-cli FLUSHALL
+      - echo "Redis cache cleared"
+
+  cache-info:
+    desc: Show Redis cache information
+    cmds:
+      - docker compose exec {{.REDIS_SERVICE}} redis-cli INFO memory
+
+  queue-info:
+    desc: Show RabbitMQ queue information
+    cmds:
+      - docker compose exec {{.RABBITMQ_SERVICE}} rabbitmq-diagnostics list_queues
+
+  # ========================================
+  # DEPLOYMENT & PRODUCTION
+  # ========================================
+
+  deploy-dev:
+    desc: Deploy to development environment
+    cmds:
+      - echo "Deploying to development..."
+      - task: build
+      - task: up
+      - task: db-migrate
+      - task: health
+      - echo "Development deployment complete!"
+
+  deploy-prod:
+    desc: Deploy to production environment
+    cmds:
+      - echo "Deploying to production..."
+      - docker compose -f docker-compose.prod.yml build
+      - docker compose -f docker-compose.prod.yml up -d
+      - docker compose -f docker-compose.prod.yml exec {{.BACKEND_SERVICE}} alembic upgrade head
+      - echo "Production deployment complete!"
+
+  deploy-check:
+    desc: Check deployment health
+    cmds:
+      - echo "Checking deployment health..."
+      - curl -f http://localhost:8000/health
+      - task: health
+
+  # ========================================
+  # MONITORING & OBSERVABILITY
+  # ========================================
+
+  monitor:
+    desc: Show real-time monitoring information
+    cmds:
+      - echo "Real-time monitoring..."
+      - docker stats --no-stream
+
+  monitor-logs:
+    desc: Monitor logs in real-time
+    cmds:
+      - docker compose logs -f
+
+  metrics:
+    desc: Show application metrics
+    cmds:
+      - echo "Application metrics..."
+      - curl -s http://localhost:8000/health
+
+  performance-test:
+    desc: Run performance tests
+    cmds:
+      - echo "Running performance tests..."
+      - ab -n 1000 -c 10 http://localhost:8000/health
+
+  load-test:
+    desc: Run load tests with Locust
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} locust -f tests/load_test.py --host=http://localhost:8000 --headless -u 100 -r 10 -t 60s --html=reports/load-test-report.html
+      - echo "Load test complete. Check reports/load-test-report.html for results."
+
+  stress-test:
+    desc: Run stress tests
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} locust -f tests/stress_test.py --host=http://localhost:8000 --headless -u 500 -r 50 -t 300s --html=reports/stress-test-report.html
+      - echo "Stress test complete. Check reports/stress-test-report.html for results."
+
+  profile-memory:
+    desc: Profile memory usage
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} python -m memory_profiler app/main.py
+      - echo "Memory profiling complete."
+
+  profile-cpu:
+    desc: Profile CPU usage
+    cmds:
+      - docker compose exec -T {{.BACKEND_SERVICE}} py-spy record -o /tmp/profile.svg --pid 1 --duration 10
+      - docker compose exec {{.BACKEND_SERVICE}} ls -la /tmp/profile.svg
+      - echo "CPU profiling complete. Profile saved to /tmp/profile.svg"
+
+  profile-performance:
+    desc: Profile application performance
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pyinstrument -r html -o reports/performance-profile.html app/main.py
+      - echo "Performance profiling complete. Check reports/performance-profile.html for results."
+
+  # ========================================
+  # UTILITIES & HELPERS
+  # ========================================
+
+  clean:
+    desc: Clean up Docker resources
+    cmds:
+      - docker system prune -f
+      - docker volume prune -f
+
+  clean-all:
+    desc: Clean up all Docker resources (including images)
+    cmds:
+      - docker system prune -af
+      - docker volume prune -f
+
+  update-deps:
+    desc: Update Python dependencies
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pip install --upgrade pip
+      - docker compose exec {{.BACKEND_SERVICE}} pip install --upgrade -r requirements.txt
+
+  deps-tree:
+    desc: Show dependency tree
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pip install pipdeptree
+      - docker compose exec {{.BACKEND_SERVICE}} pipdeptree
+
+  deps-outdated:
+    desc: Show outdated dependencies
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pip list --outdated
+
+  deps-compile:
+    desc: Compile requirements from requirements.in
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pip install pip-tools
+      - docker compose exec {{.BACKEND_SERVICE}} pip-compile requirements.in
+
+  deps-sync:
+    desc: Sync dependencies with requirements.txt
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pip install pip-tools
+      - docker compose exec {{.BACKEND_SERVICE}} pip-sync requirements.txt
+
+  security-scan:
+    desc: Run comprehensive security scan
+    cmds:
+      - task: security-bandit
+      - task: security-safety
+      - task: security-pip-audit
+      - echo "Comprehensive security scan complete!"
+
+  security-bandit:
+    desc: Run Bandit security scan
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} bandit -r app -f json -o reports/bandit-report.json || true
+      - docker compose exec {{.BACKEND_SERVICE}} bandit -r app -f txt || true
+      - echo "Bandit security scan complete. Check reports/bandit-report.json for detailed results."
+
+  security-safety:
+    desc: Run Safety vulnerability scan
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pip install safety
+      - docker compose exec {{.BACKEND_SERVICE}} safety scan --json --output reports/safety-report.json || true
+      - docker compose exec {{.BACKEND_SERVICE}} safety scan || true
+      - echo "Safety vulnerability scan complete. Check reports/safety-report.json for detailed results."
+
+
+  security-pip-audit:
+    desc: Run pip-audit dependency scan
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} pip install pip-audit
+      - docker compose exec {{.BACKEND_SERVICE}} pip-audit --format=json --output=reports/pip-audit-report.json || true
+      - docker compose exec {{.BACKEND_SERVICE}} pip-audit || true
+      - echo "pip-audit dependency scan complete. Check reports/pip-audit-report.json for detailed results."
+
+  security-report:
+    desc: Show all security scan reports
+    cmds:
+      - echo "=== Bandit Report ==="
+      - docker compose exec {{.BACKEND_SERVICE}} cat reports/bandit-report.json || echo "No bandit report found."
+      - echo "=== Safety Report ==="
+      - docker compose exec {{.BACKEND_SERVICE}} cat reports/safety-report.json || echo "No safety report found."
+      - echo "=== pip-audit Report ==="
+      - docker compose exec {{.BACKEND_SERVICE}} cat reports/pip-audit-report.json || echo "No pip-audit report found."
+
+  generate-docs:
+    desc: Generate comprehensive documentation
+    cmds:
+      - task: docs-mkdocs
+      - task: docs-api
+      - task: docs-validate
+      - echo "Documentation generation complete!"
+
+  docs-mkdocs:
+    desc: Generate MkDocs documentation (requires full MkDocs setup)
+    cmds:
+      - echo "MkDocs documentation generation requires additional setup."
+      - echo "For now, use the organized markdown files in docs/ directory."
+      - echo "For MkDocs setup - pip install -r requirements.txt"
+      - echo "Then - mkdocs build"
+
+  docs-mkdocs-serve:
+    desc: Serve MkDocs documentation locally (requires full MkDocs setup)
+    cmds:
+      - echo "MkDocs documentation serving requires additional setup."
+      - echo "For now, use the organized markdown files in docs/ directory."
+      - echo "For MkDocs setup - pip install -r requirements.txt"
+      - echo "Then - mkdocs serve"
+
+  docs-api:
+    desc: Generate API documentation
+    cmds:
+      - echo "API documentation is auto-generated and available at:"
+      - echo "  http://localhost:8000/docs"
+      - echo "  http://localhost:8000/redoc"
+      - echo "  http://localhost:8000/openapi.json"
+
+  docs-validate:
+    desc: Validate documentation structure
+    cmds:
+      - echo "Validating documentation structure..."
+      - test -d docs/user || echo "Missing docs/user directory"
+      - test -d docs/developer || echo "Missing docs/developer directory"
+      - test -d docs/api || echo "Missing docs/api directory"
+      - test -d docs/deployment || echo "Missing docs/deployment directory"
+      - test -d docs/testing || echo "Missing docs/testing directory"
+      - test -d docs/architecture || echo "Missing docs/architecture directory"
+      - test -f docs/README.md || echo "Missing docs/README.md"
+      - test -f README.md || echo "Missing main README.md"
+      - echo "Documentation structure validation complete!"
+
+  docs-serve:
+    desc: Serve documentation locally
+    cmds:
+      - echo "Starting documentation server..."
+      - echo "Main documentation - http://localhost:8000/docs"
+      - echo "API documentation - http://localhost:8000/docs"
+      - echo "Organized documentation available in docs/ directory"
+      - echo "To serve MkDocs - task docs-mkdocs-serve (requires setup)"
+
+  docs-check:
+    desc: Check documentation for issues
+    cmds:
+      - echo "Checking documentation..."
+      - find docs/ -name "*.md" -exec echo "Checking {}" \;
+      - echo "Documentation check complete!"
+
+  docs-update:
+    desc: Update documentation from source
+    cmds:
+      - echo "Updating documentation from source code..."
+      - task: docs-api
+      - task: docs-validate
+      - echo "Documentation update complete!"
+
+  backup-all:
+    desc: Create complete backup
+    cmds:
+      - task: db-backup
+      - echo "Complete backup created"
+
+  restore-all:
+    desc: Restore from complete backup
+    cmds:
+      - task: db-restore "{{.CLI_ARGS}}"
+
+  # ========================================
+  # QUICK ACTIONS
+  # ========================================
+
+  quick-start:
+    desc: Quick start development environment
+    cmds:
+      - task: dev-setup
+      - task: api-test
+      - echo "Ready to develop!"
+
+  quick-test:
+    desc: Quick test run
+    cmds:
+      - task: quality
+      - task: test
+
+  quick-deploy:
+    desc: Quick deployment
+    cmds:
+      - task: quality
+      - task: test
+      - task: deploy-dev
+
+  # ========================================
+  # INFORMATION & STATUS
+  # ========================================
+
+  info:
+    desc: Show project information
+    cmds:
+      - echo "URL Shortener Service"
+      - echo "Project - {{.PROJECT_NAME}}"
+      - echo "Backend - {{.BACKEND_SERVICE}}"
+      - echo "Database - {{.DB_SERVICE}}"
+      - echo "Redis - {{.REDIS_SERVICE}}"
+      - echo "RabbitMQ - {{.RABBITMQ_SERVICE}}"
+      - echo "Nginx - {{.NGINX_SERVICE}}"
+
+  version:
+    desc: Show version information
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} python -c "from app.core.config import settings; print('Version:', settings.VERSION)"
+
+  env:
+    desc: Show environment information
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} python -c "from app.core.config import settings; print('Environment:', settings.ENVIRONMENT)"
+
+  # ========================================
+  # INTERACTIVE MODES
+  # ========================================
+
+  interactive:
+    desc: Enter interactive development mode
+    cmds:
+      - echo "Interactive Development Mode"
+      - echo "Available commands:"
+      - echo "  task shell        - Open backend shell"
+      - echo "  task shell-db     - Open database shell"
+      - echo "  task shell-redis  - Open Redis CLI"
+      - echo "  task logs         - View logs"
+      - echo "  task health       - Check health"
+      - echo "  task api-test     - Test API"
+
+  debug:
+    desc: Enter debug mode
+    cmds:
+      - echo "Debug Mode"
+      - echo "Starting services with debug logging..."
+      - docker compose --env-file .env up -d
+      - docker compose logs -f {{.BACKEND_SERVICE}}
+
+  # ========================================
+  # WORKFLOW SHORTCUTS
+  # ========================================
+
+  workflow-dev:
+    desc: Complete development workflow
+    cmds:
+      - task: dev-setup
+      - task: quality
+      - task: test
+      - task: api-test
+      - echo "Development workflow complete!"
+
+  workflow-ci:
+    desc: CI/CD workflow
+    cmds:
+      - task: quality
+      - task: test-coverage-fail
+      - task: security-scan
+      - echo "CI/CD workflow complete!"
+
+  workflow-deploy:
+    desc: Deployment workflow
+    cmds:
+      - task: quality
+      - task: test
+      - task: deploy-prod
+      - task: deploy-check
+      - echo "Deployment workflow complete!"
+
+  # ========================================
+  # CUSTOM TASKS
+  # ========================================
+
+  custom:
+    desc: Run custom command
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} "{{.CLI_ARGS}}"
+
+  exec:
+    desc: Execute command in backend container
+    cmds:
+      - docker compose exec {{.BACKEND_SERVICE}} "{{.CLI_ARGS}}"

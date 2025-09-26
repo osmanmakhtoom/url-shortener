@@ -1,9 +1,8 @@
-from .uuid_mixin import UUIDMixin
-from .is_active_mixin import IsActiveMixin
-from .timestamp_mixin import TimestampedMixin
-from .soft_delete_mixin import SoftDeleteMixin
 from .id_mixin import IDMixin
-
+from .is_active_mixin import IsActiveMixin
+from .soft_delete_mixin import SoftDeleteMixin
+from .timestamp_mixin import TimestampedMixin
+from .uuid_mixin import UUIDMixin
 
 __all__ = [
     "UUIDMixin",

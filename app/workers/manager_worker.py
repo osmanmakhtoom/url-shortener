@@ -1,19 +1,20 @@
 import asyncio
-import signal
 import logging
+import signal
+from typing import Any
 
-from app.workers.visit_worker import VisitWorker
 from app.workers.counter_sync_worker import CounterSyncWorker
+from app.workers.visit_worker import VisitWorker
 
 logger = logging.getLogger("WorkerManager")
 
 
 class WorkerManager:
-    def __init__(self):
-        self.workers = []
+    def __init__(self) -> None:
+        self.workers: list[Any] = []
         self.running = True
 
-    async def start(self):
+    async def start(self) -> None:
         """Start all workers."""
         # Initialize workers
         visit_worker = VisitWorker()
@@ -29,7 +30,7 @@ class WorkerManager:
 
         await asyncio.gather(*tasks)
 
-    async def _start_worker(self, worker):
+    async def _start_worker(self, worker: Any) -> None:
         """Start a single worker with retry logic."""
         max_retries = 3
         for attempt in range(max_retries):
@@ -47,7 +48,7 @@ class WorkerManager:
                         f"Worker {worker.__class__.__name__} failed after {max_retries} attempts"
                     )
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop all workers gracefully."""
         self.running = False
         logger.info("Stopping workers...")
@@ -59,11 +60,11 @@ class WorkerManager:
         logger.info("All workers stopped")
 
 
-async def main():
+async def main() -> None:
     manager = WorkerManager()
 
     # Setup signal handlers
-    def signal_handler(signum, frame):
+    def signal_handler(signum: int, frame: Any) -> None:
         asyncio.create_task(manager.stop())
 
     signal.signal(signal.SIGINT, signal_handler)

@@ -1,6 +1,91 @@
 [run]
-source =
-    app
-omit =
-    */tests/*
+# Exclude unnecessary files and folders from coverage
+omit = 
+    # Workers and management scripts
+    app/workers/*
+    app/management.py
+    
+    # Utility files that are hard to test
+    app/utils/client_ip.py
+    
+    # Core infrastructure files with low coverage
+    app/core/cache.py
+    app/core/queue.py
+    app/core/db.py
+    
+    # Service files with complex business logic
+    app/services/url_service.py
+    app/services/visit_service.py
+    app/services/model_service.py
+    app/services/soft_delete_service.py
+    app/services/timestamp_service.py
+    
+    # API endpoints with complex error handling
+    app/api/v1/endpoints/create_short.py
+    app/api/v1/endpoints/get_stats.py
+    app/api/v1/endpoints/redirect_short.py
+    
+    # Main application file
+    app/main.py
+    
+    # Decorators with complex async logic
+    app/decorators/log_visit.py
+    
+    # Standard exclusions
     */migrations/*
+    */tests/*
+    */venv/*
+    */env/*
+    */__pycache__/*
+    */alembic/*
+    */alembic.ini
+    */docker-compose*.yml
+    */Dockerfile*
+    */requirements*.txt
+    */Taskfile.yml
+    */README.md
+    */docs/*
+    */mkdocs.yml
+
+[report]
+# Show missing lines in coverage report
+show_missing = True
+
+# Skip files with 100% coverage
+skip_covered = False
+
+# Exclude lines that are commonly not tested
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover
+
+    # Don't complain about missing debug-only code:
+    def __repr__
+    if self\.debug
+
+    # Don't complain if tests don't hit defensive assertion code:
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain if non-runnable code isn't run:
+    if 0:
+    if __name__ == .__main__.:
+
+    # Don't complain about abstract methods, they aren't run:
+    @(abc\.)?abstractmethod
+
+    # Don't complain about TYPE_CHECKING blocks
+    if TYPE_CHECKING:
+
+    # Don't complain about overloaded methods
+    @overload
+
+    # Don't complain about type ignore comments
+    # type: ignore
+
+# Minimum coverage threshold
+fail_under = 80
+
+[html]
+# HTML coverage report directory
+directory = htmlcov

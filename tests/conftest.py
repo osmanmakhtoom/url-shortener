@@ -1,16 +1,16 @@
 import asyncio
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlmodel import SQLModel
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel
 
 from app.core.cache import redis_client
-from app.core.queue import RabbitMQClient
 from app.core.config import settings
+from app.core.queue import RabbitMQClient
 from app.main import app
-
 
 TEST_DATABASE_URL = (
     settings.TEST_DATABASE_URL

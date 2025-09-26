@@ -1,4 +1,6 @@
-from typing import Optional, List
+import os
+from typing import Any, List, Optional
+
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
@@ -61,7 +63,7 @@ class Settings(BaseSettings):
 
     @field_validator("DATABASE_URL", "REDIS_URL", "RABBITMQ_URL")
     @classmethod
-    def validate_required(cls, v: str, field):
+    def validate_required(cls, v: str, field: Any) -> str:
         if not v:
             raise ValueError(f"{field.name} is required")
         return v
@@ -90,4 +92,11 @@ class Settings(BaseSettings):
         return config
 
 
-settings = Settings()
+# Load settings with fallback values for development
+settings = Settings(
+    DATABASE_URL=os.getenv(
+        "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/shortener"
+    ),
+    REDIS_URL=os.getenv("REDIS_URL", "redis://localhost:6379"),
+    RABBITMQ_URL=os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672"),
+)

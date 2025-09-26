@@ -1,17 +1,17 @@
 import datetime
-from fastapi import FastAPI, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from fastapi import Depends, FastAPI
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import text
 
+from app.api.v1.api import api_router
+from app.core.cache import redis_client
 from app.core.config import settings
 from app.core.db import get_db_dependency
-from app.core.startup import lifespan, setup_logging
-from app.api.v1.api import api_router
-from app.schemas import HealthCheck
-from app.core.cache import redis_client
 from app.core.queue import rabbitmq_client
-
+from app.core.startup import lifespan, setup_logging
+from app.schemas import HealthCheck
 
 setup_logging()
 
@@ -27,7 +27,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", response_model=dict)
-async def root():
+async def root() -> dict[str, str]:
     return {
         "message": f"Welcome to {settings.PROJECT_NAME}",
         "version": settings.VERSION,
@@ -38,7 +38,7 @@ async def root():
 
 
 @app.get("/health", response_model=HealthCheck)
-async def health_check(session: AsyncSession = Depends(get_db_dependency)):
+async def health_check(session: AsyncSession = Depends(get_db_dependency)) -> HealthCheck:
     db_status = "disconnected"
     redis_status = "disconnected"
     rabbitmq_status = "disconnected"
@@ -79,7 +79,7 @@ async def health_check(session: AsyncSession = Depends(get_db_dependency)):
 
     return HealthCheck(
         status=status,
-        timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        timestamp=datetime.datetime.now().isoformat(),
         version=settings.VERSION,
         environment=settings.ENVIRONMENT,
         database=db_status,

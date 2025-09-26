@@ -1,5 +1,6 @@
 import asyncio
 import logging
+
 from app.core.db import get_session
 from app.services import URLService
 from app.services.base import BaseService
@@ -12,13 +13,13 @@ RETRY_DELAY = 5
 
 
 class CounterSyncWorker(BaseService):
-    def __init__(self, interval: int = SYNC_INTERVAL):
+    def __init__(self, interval: float = SYNC_INTERVAL):
         super().__init__(session=None)
         self.interval = interval
         self.running = True
         self.retry_count = 0
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the worker with proper Redis connection initialization."""
         try:
             # Ensure Redis connection is established before starting
@@ -45,7 +46,7 @@ class CounterSyncWorker(BaseService):
             logger.error(f"Failed to start CounterSyncWorker: {e}")
             self.running = False
 
-    async def flush(self):
+    async def flush(self) -> None:
         """Flush visit counts from Redis to database."""
         try:
             # Ensure Redis connection is active before operations
@@ -101,7 +102,7 @@ class CounterSyncWorker(BaseService):
             logger.error(f"Flush error: {e}")
             raise  # Re-raise to trigger retry logic
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Graceful shutdown"""
         self.running = False
         if hasattr(self.redis, "close"):

@@ -5,7 +5,7 @@ from pathlib import Path
 from app.core.db import init_db
 
 
-def run_alembic_command(command: str):
+def run_alembic_command(command: str) -> None:
     """Run an alembic command"""
     try:
         result = subprocess.run(
@@ -25,41 +25,41 @@ def run_alembic_command(command: str):
         sys.exit(1)
 
 
-def create_migration(message: str):
+def create_migration(message: str) -> None:
     """Create a new migration"""
     print(f"Creating migration: {message}")
     run_alembic_command(f"revision --autogenerate -m '{message}'")
 
 
-def upgrade_database():
+def upgrade_database() -> None:
     """Upgrade database to latest migration"""
     print("Upgrading database...")
     run_alembic_command("upgrade head")
 
 
-def downgrade_database(revision: str = "-1"):
+def downgrade_database(revision: str = "-1") -> None:
     """Downgrade database by one revision"""
     print(f"Downgrading database to {revision}...")
     run_alembic_command(f"downgrade {revision}")
 
 
-def show_migration_history():
+def show_migration_history() -> None:
     """Show migration history"""
     print("Migration history:")
     run_alembic_command("history")
 
 
-def show_current_revision():
+def show_current_revision() -> None:
     """Show current database revision"""
     print("Current revision:")
     run_alembic_command("current")
 
 
-def create_tables_directly():
+async def create_tables_directly() -> None:
     """Create tables directly without migrations (for development)"""
     print("Creating tables directly...")
     try:
-        init_db()
+        await init_db()
         print("Tables created successfully!")
     except Exception as e:
         print(f"Error creating tables: {e}")
@@ -95,7 +95,9 @@ if __name__ == "__main__":
     elif command == "current":
         show_current_revision()
     elif command == "create-tables":
-        create_tables_directly()
+        import asyncio
+
+        asyncio.run(create_tables_directly())
     else:
         print(f"Unknown command: {command}")
         sys.exit(1)

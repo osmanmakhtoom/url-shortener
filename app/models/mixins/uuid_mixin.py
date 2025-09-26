@@ -1,6 +1,7 @@
-from sqlmodel import SQLModel, Field, Uuid
 from uuid import UUID
+
 import uuid6
+from sqlmodel import Field, SQLModel, Uuid
 
 
 class UUIDMixin(SQLModel, table=False):

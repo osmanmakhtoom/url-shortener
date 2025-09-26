@@ -1,9 +1,10 @@
-from pydantic import BaseModel, HttpUrl
 from datetime import datetime
+
+from pydantic import BaseModel, HttpUrl
 
 
 class StatsResponse(BaseModel):
     original_url: HttpUrl
     short_code: str
-    visits: int
+    visit_count: int
     created_at: datetime

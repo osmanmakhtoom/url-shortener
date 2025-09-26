@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from app.api.v1.endpoints import create_short, get_stats, redirect_short
 
 api_router = APIRouter()
